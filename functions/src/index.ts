@@ -46,6 +46,14 @@ const REGION = 'asia-northeast1';
 export const crawlEvents = functions
     .region(REGION)
     .https.onRequest(async (req, res) => {
+        const cronPassword = req.get('X-CRON-PASSWORD');
+        if (cronPassword !== functions.config().api.key) {
+            console.error(cronPassword);
+
+            res.status(403).send(cronPassword);
+            return;
+        }
+
         const events = await fetchEvents()
         if (events.status === "ng") {
             console.error(events);
