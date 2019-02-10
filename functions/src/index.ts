@@ -3,8 +3,6 @@ import * as admin from 'firebase-admin';
 admin.initializeApp();
 import fetch from 'node-fetch';
 
-const REGION = 'asia-northeast1';
-
 interface Liver {
     id: number;
     name: string;
@@ -34,20 +32,37 @@ interface EventsResponse {
 }
 
 const fetchEvents = async (): Promise<EventsResponse> => {
-    return await fetch("https://cors-anywhere.herokuapp.com/https://api.itsukaralink.jp/events.json")
-        .then(res => res.json());
+    const cors = "https://cors-anywhere.herokuapp.com/";
+    const url = "https://api.itsukaralink.jp/events.json";
+    const requestInit = { headers: { "origin": "" } };
+
+    return await fetch(cors + url, requestInit)
+        .then(res => res.json())
+        .catch(err => console.error(err));
 }
 
+const REGION = 'asia-northeast1';
 
 export const crawlEvents = functions
     .region(REGION)
     .https.onRequest(async (req, res) => {
         const events = await fetchEvents()
-        if (events.status === "ng") return;
+        if (events.status === "ng") {
+            console.error(events);
+
+            res.status(500).send(events.status);
+            return;
+        }
 
         const db = admin.firestore();
         const batch = db.batch();
+
+        const counts = events.data.events.length;
+        console.info(`Commit ${counts} events`)
+
         events.data.events.forEach(evt => {
+            console.info(`Set ${evt.id}: ${evt.name}`)
+
             batch.set(
                 db.collection("/events").doc(`${evt.id}`),
                 {
@@ -66,10 +81,6 @@ export const crawlEvents = functions
         });
 
         batch.commit()
-            .then(_ => {
-                console.log("Transaction successfully committed!");
-            })
-            .catch(function(error) {
-                console.log("Transaction failed: ", error);
-            });
+            .then(_ => res.status(200).send(`${events.status}\n${counts}`))
+            .catch(err => console.error(err));
     });
