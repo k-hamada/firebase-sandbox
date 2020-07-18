@@ -84,10 +84,12 @@ export const crawlEvents = functions
                     "id" : evt.id,
                     "name": evt.name,
                     "description": evt.description,
+                    "public": evt.public,
                     "url": evt.url,
                     "thumbnail": evt.thumbnail,
                     "start_date": evt.start_date,
                     "end_date": evt.end_date,
+                    "recommend": evt.recommend,
                     "genre_id": evt.genre.id,
                     "liver": {
                         "id": evt.liver.id,
