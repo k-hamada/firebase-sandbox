@@ -10,6 +10,11 @@ interface Liver {
     color: string;
 }
 
+interface Genre {
+    id: number;
+    name: string;
+}
+
 interface Event {
     id: number;
     name: string;
@@ -20,6 +25,7 @@ interface Event {
     start_date: Date;
     end_date: Date;
     recommend: boolean;
+    genre: Genre;
     liver: Liver;
 }
 
@@ -82,6 +88,7 @@ export const crawlEvents = functions
                     "thumbnail": evt.thumbnail,
                     "start_date": evt.start_date,
                     "end_date": evt.end_date,
+                    "genre_id": evt.genre.id,
                     "liver": {
                         "id": evt.liver.id,
                         "name": evt.liver.name,
