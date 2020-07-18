@@ -25,7 +25,7 @@ interface Event {
     start_date: Date;
     end_date: Date;
     recommend: boolean;
-    genre: Genre;
+    genre: Genre | null;
     liver: Liver;
 }
 
@@ -90,7 +90,7 @@ export const crawlEvents = functions
                     "start_date": evt.start_date,
                     "end_date": evt.end_date,
                     "recommend": evt.recommend,
-                    "genre_id": evt.genre.id,
+                    "genre_id": evt.genre?.id || -1,
                     "liver": {
                         "id": evt.liver.id,
                         "name": evt.liver.name,
