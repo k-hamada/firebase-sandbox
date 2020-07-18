@@ -16,6 +16,7 @@ interface Event {
     description: string;
     public: number;
     url: string;
+    thumbnail: string;
     start_date: Date;
     end_date: Date;
     recommend: boolean;
@@ -78,6 +79,7 @@ export const crawlEvents = functions
                     "name": evt.name,
                     "description": evt.description,
                     "url": evt.url,
+                    "thumbnail": evt.thumbnail,
                     "start_date": evt.start_date,
                     "end_date": evt.end_date,
                     "liver": {
