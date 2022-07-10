@@ -1,7 +1,15 @@
-import * as functions from 'firebase-functions';
-import * as admin from 'firebase-admin';
-admin.initializeApp();
-import fetch from 'node-fetch';
+import * as functions from "firebase-functions";
+import {initializeApp} from "firebase-admin/app";
+import {getFirestore} from "firebase-admin/firestore";
+import fetch from "cross-fetch";
+
+const REGION = "asia-northeast1";
+const SCHEDULE = "0 */4 * * *";
+const TIME_ZONE = "Asia/Tokyo";
+const URL = "https://api.itsukaralink.jp/events.json";
+
+functions.logger.info("initialize");
+initializeApp();
 
 interface Liver {
     id: number;
@@ -38,68 +46,79 @@ interface EventsResponse {
     data: Data;
 }
 
-const fetchEvents = async (): Promise<EventsResponse> => {
-    const cors = "https://cors-anywhere.herokuapp.com/";
-    const url = "https://api.itsukaralink.jp/events.json";
-    const requestInit = { headers: { "origin": "" } };
 
-    return await fetch(cors + url, requestInit)
-        .then(res => res.json())
-        .catch(err => console.error(err));
-}
+const fetchEvents = async (): Promise<EventsResponse|null> => {
+  functions.logger.info("#fetchEvents", {url: URL});
 
-const REGION = 'asia-northeast1';
+  try {
+    const response = await fetch(URL);
+    return await response.json() as EventsResponse;
+  } catch (err) {
+    functions.logger.error("#fetchEvents", err);
+    return null;
+  }
+};
 
-export const crawlEvents = functions
+type DB = FirebaseFirestore.Firestore;
+const writeEventToFirestore = async (events: Event[], db: DB) => {
+  const counts = events.length;
+
+  functions.logger.info("#writeEventToFirestore", {counts});
+  if (counts === 0) {
+    return;
+  }
+
+  const batch = db.batch();
+
+  for (const event of events) {
+    const param = {
+      "id": event.id,
+      "name": event.name,
+      "description": event.description,
+      "public": event.public,
+      "url": event.url,
+      "thumbnail": event.thumbnail,
+      "start_date": event.start_date,
+      "end_date": event.end_date,
+      "recommend": event.recommend,
+      "genre_id": event.genre?.id || -1,
+      "liver": {
+        "id": event.liver.id,
+        "name": event.liver.name,
+      },
+    };
+
+    functions.logger.info("#writeEventToFirestore.Set", param);
+    batch.set(
+        db.collection("/events").doc(event.id.toString()),
+        param
+    );
+  }
+
+  try {
+    await batch.commit();
+  } catch (err) {
+    functions.logger.error("#writeEventToFirestore", err);
+  }
+};
+
+const crawlItsukaralinkEventsHandler = async () => {
+  const apiResponse = await fetchEvents();
+  if (apiResponse === null) {
+    return;
+  }
+  if (apiResponse.status === "ng") {
+    functions.logger.error("#crawlEventsHandler: status is ng");
+  }
+
+  const db = getFirestore();
+  await writeEventToFirestore(apiResponse.data.events, db);
+};
+
+export const crawlItsukaralinkEvents = functions
     .region(REGION)
-    .https.onRequest(async (req, res) => {
-        const cronPassword = req.get('X-CRON-PASSWORD');
-        if (cronPassword !== functions.config().api.key) {
-            console.error(cronPassword);
+    .pubsub
+    .schedule(SCHEDULE)
+    .timeZone(TIME_ZONE)
+    .onRun(crawlItsukaralinkEventsHandler);
 
-            res.status(403).send(cronPassword);
-            return;
-        }
-
-        const events = await fetchEvents()
-        if (events.status === "ng") {
-            console.error(events);
-
-            res.status(500).send(events.status);
-            return;
-        }
-
-        const db = admin.firestore();
-        const batch = db.batch();
-
-        const counts = events.data.events.length;
-        console.info(`Commit ${counts} events`)
-
-        events.data.events.forEach(evt => {
-            console.info(`Set ${evt.id}: ${evt.name}`)
-
-            batch.set(
-                db.collection("/events").doc(`${evt.id}`),
-                {
-                    "id" : evt.id,
-                    "name": evt.name,
-                    "description": evt.description,
-                    "public": evt.public,
-                    "url": evt.url,
-                    "thumbnail": evt.thumbnail,
-                    "start_date": evt.start_date,
-                    "end_date": evt.end_date,
-                    "recommend": evt.recommend,
-                    "genre_id": evt.genre?.id || -1,
-                    "liver": {
-                        "id": evt.liver.id,
-                        "name": evt.liver.name,
-                    }
-                }
-            );
-        });
-
-        batch.commit()
-            .then(_ => res.status(200).send(`${events.status}\n${counts}`))
-            .catch(err => console.error(err));
-    });
